@@ -1,2 +1,2 @@
 # remote-code-executor
-Bachelors summer sroject
+Bachelors summer project
