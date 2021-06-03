@@ -1,4 +1,6 @@
+from tkinter import Scrollbar
 import PySimpleGUI as sg
+from PySimpleGUI.PySimpleGUI import Input
 
 
 def assign_layout():
@@ -7,7 +9,7 @@ def assign_layout():
             sg.Tab("Files", [
                 [
                     # TODO: Path to file/folder
-                    sg.Text("Path to file/folder"), sg.FilesBrowse("File(s)"), sg.FolderBrowse("Folder")
+                    sg.Input("Path to file/folder", size=(80, 1), key='-INPUT-', readonly=True), sg.FilesBrowse("File(s)"), sg.FolderBrowse("Folder")
 
                 ],
                 [
@@ -27,24 +29,27 @@ def assign_layout():
             ]),
             sg.Tab("Input", [
                 [
-                    # TODO: Allow user to enter <input>
-                    sg.Text("")
+                    sg.Multiline(size=(800, 600))
                 ]
             ]),
             sg.Tab("Expected Output", [
                 [
-                    # TODO: Allow user to enter <expected output>
-                    sg.Text("")
+                    sg.Multiline(size=(800, 600))
 
                 ]
             ]),
         ]
     ]
-    tab_group = [[sg.TabGroup(tabs)]]
+
+    # TODO: Replace with screen dimensions for better support
+    tab_group = [[sg.TabGroup(tabs, size=(1920, 1080))]]
     layout = [[tab_group]]
     window = sg.Window(
-        "Remote Code Executor", layout, size=(800, 600), element_justification="c"
+        "Remote Code Executor", layout, size=(800, 600), element_justification="c", resizable=True, finalize=True
     )
+    # window['-INPUT-'].Widget.configure(highlightcolor='red', highlightthickness=2)
+    window['-INPUT-'].Widget.configure(highlightcolor='grey', highlightthickness=2)
+
     return window
 
 
