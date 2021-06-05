@@ -1,10 +1,12 @@
 from tkinter import Scrollbar
 
 import PySimpleGUI as sg
-# from PySimpleGUI.PySimpleGUI import Input
 
 import os
 import time
+
+import csv
+
 
 def assign_layout():
     tabs = [
@@ -14,7 +16,6 @@ def assign_layout():
                     # sg.Input("Path to file/folder", size=(80, 1), key='-INPUT-', readonly=True), 
                     sg.Input(key='-FILE-', enable_events=True, visible=False), sg.FilesBrowse("File(s)", enable_events=True, target='-FILE-'),
                     sg.Input(key='-FOLDER-', enable_events=True, visible=False), sg.FolderBrowse("Folder", enable_events=True, target='-FOLDER-')
-
                 ],
                 [
                     # TODO: List of files selected or files inside folder
@@ -48,17 +49,25 @@ def assign_layout():
                     sg.Text(" ")
                 ],
                 [
-                    sg.Listbox([], size=(80, 25), right_click_menu=[[]], key='-RESULT-')
+                    sg.Table(values=[['                           ', '       '], ['                           ', '       ']], headings=['File name', 'Result'],  
+                    display_row_numbers=True,
+                    justification='right',
+                    col_widths=60,
+                    num_rows=10,
+                    row_height=35,
+                    alternating_row_color='lightyellow',
+                    selected_row_colors = ('red', 'yellow'),
+                    key='-RESULT-')
                 ],
                 [
                     sg.Button("Save to CSV", key='-SAVE-')
                 ]
-            ], element_justification='c')
+            ], element_justification='c', key='-RESULT_TAB-')
         ]
     ]
 
     # TODO: Replace with screen dimensions for better support
-    tab_group = [[sg.TabGroup(tabs, size=(1920, 1080))]]
+    tab_group = [[sg.TabGroup(tabs, size=(1920, 1080), enable_events=True, key='-TAB_GROUP-')]]
     layout = [[tab_group]]
     window = sg.Window(
         "Remote Code Executor", layout, size=(800, 600), element_justification="c", resizable=True, finalize=True
@@ -91,7 +100,10 @@ def main():
     sg.set_options(font=("Montserrat", 10))
     window = assign_layout()
 
-    l = []
+    run_completed = False
+
+    l = [] 
+    results = [] 
 
     while True:
         event, values = window.read()
@@ -99,17 +111,22 @@ def main():
         if event in (None, sg.WINDOW_CLOSED):
             break
 
-        if event in '-FILE-':
+        if event == '-FILE-':
             l = list(map(os.path.basename, values['-FILE-'].split(';')))
             window['-LIST-'].update(l)
             window.refresh()
 
-        if event in '-FOLDER-':
+            results = ['Pass'] * len(l)
+
+        if event == '-FOLDER-':
             l = os.listdir(values['-FOLDER-'])
             window['-LIST-'].update(l)
             window.refresh()
+            
+            results = ['Pass'] * len(l)
+
         
-        if event in '-RUN-':
+        if event == '-RUN-':
             length = len(l)
             if length == 0:
                 sg.popup("No files selected, aborting run.")
@@ -127,7 +144,25 @@ def main():
                 # window.finalize()
                 # window['-RESULT-'].update(visible=True)
                 # window.refresh()
-
+                run_completed = True
+        if values['-TAB_GROUP-'] == '-RESULT_TAB-':
+            if run_completed:
+                # print(l)
+                # print(results)
+                vals = [list(e) for e in zip(l, results)]
+                # print(vals)
+                window['-RESULT-'].update(values=vals)
+            else:
+                sg.popup('Run first to view results.')
+        
+        if event == '-SAVE-':
+            filename = 'results_heNIAknzxAI'
+            vals = [list(e) for e in zip(l, results)]
+            with open(filename+'.csv', 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(['File name', 'Result'])
+                writer.writerows(vals)
+            sg.popup('File saved as '+filename+'.csv')
 
 if __name__ == "__main__":
     main()
