@@ -18,17 +18,15 @@ def assign_layout():
                     sg.Input(key='-FOLDER-', enable_events=True, visible=False), sg.FolderBrowse("Folder", enable_events=True, target='-FOLDER-')
                 ],
                 [
-                    # TODO: List of files selected or files inside folder
                     sg.Listbox([], size=(80, 25), right_click_menu=[[]], key='-LIST-')
                     # sg.Multiline("", key='-List-'),
 
-                    # TODO: Button for each entry to RUN the file (attach to the container)
+                    # Button for each entry to RUN the file (attach to the container)
                     # sg.Button("")
 
                     # for each_file in list_of_files
                 ],
                 [
-                    # TODO: RUN AND CSV buttons
                     sg.Button("RUN", key='-RUN-')
                 ]
 
@@ -156,7 +154,7 @@ def main():
                 sg.popup('Run first to view results.')
         
         if event == '-SAVE-':
-            filename = 'results_heNIAknzxAI'
+            filename = 'results'
             vals = [list(e) for e in zip(l, results)]
             with open(filename+'.csv', 'w', newline='') as f:
                 writer = csv.writer(f)
