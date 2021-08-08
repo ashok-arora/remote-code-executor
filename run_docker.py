@@ -1,32 +1,56 @@
-# Pass the name of the file as argument to program, hardcoded initially. 
-# The file's extension is checked and is then executed inside the docker container. 
-# Input can also be passed as argument or hardcoded initially. 
-
-# Sample program: Greeter. 
-# Input: Name -> str
-# Expected Output: Hello ${Name}!
-
-import docker
+import os
 import time
 
-filename = './test-cases/2019BCS-075.py'
-input = 'Ashok'
-expected_output = 'Hello Ashok!'
+import subprocess
 
-# docker client
-client = docker.from_env()
+import docker
 
-start_time = time.time()
 
-for i in range(1, 81):
-    # download base image if not present and run container
-    response = client.containers.run('alpine', 'echo hello world ' + str(i) )
-    # response = client.containers.run('python:3', 'python' + filename )
+class DockerRuntime:
 
-    # response is bytestring, print decoded bytestring
-    print(response.decode())
+    client = None
+    volumes = None
 
-# delete all stopped containers
-client.containers.prune()
+    def __init__(self) -> None:
+        self.client = docker.from_env()
 
-print("--- %.2f seconds ---" % (time.time() - start_time))
+    def add_volume(self, v=os.getcwd()):
+        self.volumes = v
+        print(v)
+
+    def run_python(self, file, input_file, timeout_seconds):
+        output = subprocess.check_output(
+            'docker run -v "{}":/tmp:Z python:3-alpine /bin/sh -c "python /tmp/{} < /tmp/{}"'.format(
+                self.volumes, file, input_file
+            ),
+            stderr=subprocess.STDOUT,
+            shell=True,
+            timeout=timeout_seconds,
+        )
+        return output
+
+    def run_c(self, file, input_file, timeout_seconds):
+        output = subprocess.check_output(
+            'docker run -v "{}":/tmp:Z frolvlad/alpine-gcc /bin/sh -c "gcc --static /tmp/{} -o /tmp/qq ; ./tmp/qq < ./tmp/{}; rm /tmp/qq"'.format(
+                self.volumes, file, input_file
+            ),
+            stderr=subprocess.STDOUT,
+            shell=True,
+            timeout=timeout_seconds,
+        )
+        return output
+
+    def run_cpp(self, file, input_file, timeout_seconds):
+        output = subprocess.check_output(
+            'docker run -v "{}":/tmp:Z frolvlad/alpine-gxx /bin/sh -c "c++ --static /tmp/{} -o /tmp/qq ; ./tmp/qq < ./tmp/{} ; rm /tmp/qq"'.format(
+                self.volumes, file, input_file
+            ),
+            stderr=subprocess.STDOUT,
+            shell=True,
+            timeout=timeout_seconds,
+        )
+        return output
+
+    def cleanup(self):
+        # delete all stopped containers
+        self.client.containers.prune()

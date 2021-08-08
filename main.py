@@ -1,166 +1,181 @@
-from tkinter import Scrollbar
-
-import PySimpleGUI as sg
-
+import csv
 import os
 import time
+from datetime import datetime
+import PySimpleGUI as sg
+import logging
+import backend
+import string
+import random
 
-import csv
 
+from layout import assign_layout
 
-def assign_layout():
-    tabs = [
-        [
-            sg.Tab("Files", [
-                [
-                    # sg.Input("Path to file/folder", size=(80, 1), key='-INPUT-', readonly=True), 
-                    sg.Input(key='-FILE-', enable_events=True, visible=False), sg.FilesBrowse("File(s)", enable_events=True, target='-FILE-'),
-                    sg.Input(key='-FOLDER-', enable_events=True, visible=False), sg.FolderBrowse("Folder", enable_events=True, target='-FOLDER-')
-                ],
-                [
-                    sg.Listbox([], size=(80, 25), right_click_menu=[[]], key='-LIST-')
-                    # sg.Multiline("", key='-List-'),
-
-                    # Button for each entry to RUN the file (attach to the container)
-                    # sg.Button("")
-
-                    # for each_file in list_of_files
-                ],
-                [
-                    sg.Button("RUN", key='-RUN-')
-                ]
-
-            ], element_justification='c'),
-            sg.Tab("Input", [
-                [
-                    sg.Multiline(size=(800, 600))
-                ]
-            ]),
-            sg.Tab("Expected Output", [
-                [
-                    sg.Multiline(size=(800, 600))
-
-                ]
-            ]),
-            sg.Tab("Results", [
-                [
-                    sg.Text(" ")
-                ],
-                [
-                    sg.Table(values=[['                           ', '       '], ['                           ', '       ']], headings=['File name', 'Result'],  
-                    display_row_numbers=True,
-                    justification='right',
-                    col_widths=60,
-                    num_rows=10,
-                    row_height=35,
-                    alternating_row_color='lightyellow',
-                    selected_row_colors = ('red', 'yellow'),
-                    key='-RESULT-')
-                ],
-                [
-                    sg.Button("Save to CSV", key='-SAVE-')
-                ]
-            ], element_justification='c', key='-RESULT_TAB-')
-        ]
-    ]
-
-    # TODO: Replace with screen dimensions for better support
-    tab_group = [[sg.TabGroup(tabs, size=(1920, 1080), enable_events=True, key='-TAB_GROUP-')]]
-    layout = [[tab_group]]
-    window = sg.Window(
-        "Remote Code Executor", layout, size=(800, 600), element_justification="c", resizable=True, finalize=True
-    )
-    # window['-INPUT-'].Widget.configure(highlightcolor='red', highlightthickness=2)
-    # window['-INPUT-'].Widget.configure(highlightcolor='grey', highlightthickness=2)
-
-    return window
+file_name = "rce_log_" + datetime.now().strftime("%Y%m%d-%H%M%S")
+logging.basicConfig(
+    filename=file_name,
+    format="%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s",
+    datefmt="%H:%M:%S",
+    level=logging.CRITICAL,
+)
 
 
 def main():
-    # TODO: Fix color scheme
-    sg.theme("Default1")
-    # sg.LOOK_AND_FEEL_TABLE["Reddit"] = {
-    #     "BACKGROUND": "#ffffff",
-    #     "TEXT": "#1a1a1b",
-    #     "INPUT": "#dae0e6",
-    #     "TEXT_INPUT": "#222222",
-    #     "SCROLL": "#a5a4a4",
-    #     "BUTTON": ("#FFFFFF", "#0079d3"),
-    #     "PROGRESS": ("#0079d3", "#dae0e6"),
-    #     "BORDER": 1,
-    #     "SLIDER_DEPTH": 0,
-    #     "PROGRESS_DEPTH": 0,
-    #     "ACCENT1": "#ff5414",
-    #     "ACCENT2": "#33a8ff",
-    #     "ACCENT3": "#dbf0ff",
-    # }
 
+    sg.theme("Default1")
     sg.set_options(font=("Montserrat", 10))
+
     window = assign_layout()
 
     run_completed = False
 
-    l = [] 
-    results = [] 
+    l = []
+
+    results = []
+
+    volume_to_mount = None
 
     while True:
         event, values = window.read()
         # print(event, values)
+
         if event in (None, sg.WINDOW_CLOSED):
             break
 
-        if event == '-FILE-':
-            l = list(map(os.path.basename, values['-FILE-'].split(';')))
-            window['-LIST-'].update(l)
+        # select a group of files
+        if event == "-FILE-":
+            try:
+                l = list(map(os.path.basename, values["-FILE-"].split(";")))
+                volume_to_mount = os.path.dirname(values["-FILE-"].split(";")[0])
+
+            except FileNotFoundError:
+                pass
+
+            window["-LIST-"].update(l)
             window.refresh()
 
-            results = ['Pass'] * len(l)
+            results = []
 
-        if event == '-FOLDER-':
-            l = os.listdir(values['-FOLDER-'])
-            window['-LIST-'].update(l)
+        # select a folder (all files inside will be selected)
+        if event == "-FOLDER-":
+            try:
+                l = os.listdir(values["-FOLDER-"])
+            except FileNotFoundError:
+                pass
+
+            window["-LIST-"].update(l)
             window.refresh()
+
+            volume_to_mount = values["-FOLDER-"]
+
+            results = []
+
+        if event in ("-FILE-INP-", "-FILE-EXP-"):
+            try:
+                filename = values[event]
+                with open(filename, "rt", encoding="utf-8") as f:
+                    text = f.read()
+
+                values["-" + event.split("-")[2] + "-"] = text
+                window["-" + event.split("-")[2] + "-"].update(text)
+                window.refresh()
+            except FileNotFoundError:
+                pass
+
+        # after selecting the files, run them
+        if event == "-RUN-":
+
+            try:
+                backend.check_docker_installed()
+            except FileNotFoundError:
+                sg.popup("Docker not installed! Can't proceed!!")
+                continue
+
+            # save input before running
+            case_set = string.ascii_letters
             
-            results = ['Pass'] * len(l)
+            input_file = "input_" + "".join(random.choices(case_set, k=5))
 
-        
-        if event == '-RUN-':
+            f = open(volume_to_mount + '/' + input_file, "w")
+            f.write(values["-INP-"])
+            f.close()
+
             length = len(l)
+
             if length == 0:
                 sg.popup("No files selected, aborting run.")
-            else:
-                layout = [[sg.ProgressBar(1, orientation='h', size=(20, 20), key='progress')]]
-                progress_window = sg.Window('Running in progress', layout).Finalize()
-                progress_bar = progress_window.FindElement('progress')
 
-                for i in range(0, length+1):
+            else:
+
+                layout = [
+                    [sg.ProgressBar(1, orientation="h", size=(20, 20), key="progress")]
+                ]
+
+                progress_window = sg.Window("Running in progress", layout).Finalize()
+                progress_bar = progress_window.FindElement("progress")
+
+                backend.setup(volume_to_mount)
+
+                # the files are executed here
+                for i in range(0, length):
+
+                    if l[i] == input_file:
+                        continue
+
+                    result = backend.run(
+                        l[i],
+                        input_file,
+                        values["-EXP-"],
+                        values["-CHECK-C-"],
+                        values["-CHECK-CPP-"],
+                        values["-CHECK-PY-"],
+                        values["-TIMEOUT-"],
+                    )
+
+                    if result == False:
+                        results.append("Fail")
+                    else:
+                        results.append("Pass")
                     progress_bar.UpdateBar(i, length)
-                    time.sleep(.5)
-                time.sleep(.3)
+
+                time.sleep(0.3)
                 progress_window.close()
                 sg.popup("Run completed, check 'Results' tab")
-                # window.finalize()
-                # window['-RESULT-'].update(visible=True)
-                # window.refresh()
+
                 run_completed = True
-        if values['-TAB_GROUP-'] == '-RESULT_TAB-':
+                os.remove(volume_to_mount + '/' + input_file)
+                backend.delete_containers_to_make_space()
+
+        if values["-TAB_GROUP-"] == "-RESULT_TAB-":
             if run_completed:
-                # print(l)
-                # print(results)
                 vals = [list(e) for e in zip(l, results)]
-                # print(vals)
-                window['-RESULT-'].update(values=vals)
+                window["-RESULT-"].update(values=vals)
+
             else:
-                sg.popup('Run first to view results.')
-        
-        if event == '-SAVE-':
-            filename = 'results'
+                sg.popup("Run first to view results.")
+                window.Element("-FILES-TAB-").select()
+
+        if event == "-SAVE-":
+            filename = volume_to_mount + "/" + "results_" + datetime.now().strftime("%Y%m%d-%H%M%S")
             vals = [list(e) for e in zip(l, results)]
-            with open(filename+'.csv', 'w', newline='') as f:
+
+            with open(filename + ".csv", "w", newline="") as f:
                 writer = csv.writer(f)
-                writer.writerow(['File name', 'Result'])
+                writer.writerow(["File name", "Result"])
                 writer.writerows(vals)
-            sg.popup('File saved as '+filename+'.csv')
+            sg.popup("File saved as " + filename + ".csv")
+
+
+    logging.shutdown()
+    if os.stat(file_name).st_size == 0: 
+        os.remove(file_name)
 
 if __name__ == "__main__":
     main()
+
+# sudo pip3 install -q pipenv
+
+# pipenv install --ignore-pipfile
+# pipenv run pyinstaller --onefile --name rce --clean --log-level ERROR main.py
+
+
